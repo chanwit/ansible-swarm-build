@@ -1,7 +1,7 @@
 ---
 - hosts: vbox
   tasks:
-    - name: "Build hosts file"
+    - name: "build hosts file on every host"
       lineinfile: dest=/etc/hosts
                   regexp='.*{{ item }}$'
                   line="{{item}} {{hostvars[item].ansible_hostname}}"
