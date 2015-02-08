@@ -2,7 +2,8 @@
 - hosts: vbox
   tasks:
     - name: setup interface
-      copy: src=./interfaces dest=/etc/network/interfaces
+      copy: src=./files/interfaces dest=/etc/network/interfaces
+    - hostname: name={{ ansible_eth0.ipv4.address | regex_replace('^(\\d+\\.){3}(\\d+)$', 'box\\2') }}
     - name: restart
       command: shutdown -r now "Ansible updates"
       async: 0
