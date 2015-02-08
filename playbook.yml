@@ -12,13 +12,13 @@
       apt: name=git state=present
     - stat: path={{ go }} 
       register: check_go
-    - name: install go
+    - name: install go into /opt
       unarchive: src=./files/go133.tar.gz dest=/opt
       when: not check_go.stat.exists
-    - name: checkout
+    - name: checkout swarm using go get -d
       environment: env
       command: "{{ go }} get -d github.com/docker/swarm"
-    - name: check godep
+    - name: check if godep installed already
       stat: path={{ env['GOBIN'] }}/godep
       register: godep
     - name: install godep
@@ -30,6 +30,6 @@
       environment: env
       command: chdir={{ env['GOPATH'] }}/src/github.com/docker/swarm 
                {{ env['GOBIN'] }}/godep go install
-    - name: "check if swarm build success"
+    - name: check if swarm build success
       stat: path={{ env['GOBIN'] }}/swarm
 
