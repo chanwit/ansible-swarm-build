@@ -1,6 +1,5 @@
 ---
 - hosts: vbox
-  remote_user: root
   vars:
     env:
        GOROOT: "/opt/go133"
