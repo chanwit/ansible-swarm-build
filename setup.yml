@@ -1,0 +1,10 @@
+---
+- hosts: vbox
+  tasks:
+    - name: setup interface
+      copy: src=./interfaces dest=/etc/network/interfaces
+    - name: restart
+      command: shutdown -r now "Ansible updates"
+      async: 0
+      poll: 0
+      ignore_errors: true
