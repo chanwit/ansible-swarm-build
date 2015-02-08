@@ -1,0 +1,35 @@
+---
+- hosts: vbox
+  remote_user: root
+  vars:
+    env:
+       GOROOT: "/opt/go133"
+       GOPATH: "/root/projects/swarm"
+       GOBIN:  "/root/projects/swarm/bin" 
+    go: "/opt/go133/bin/go"
+  tasks:
+    - name: install git
+      apt: name=git state=present
+    - stat: path={{ go }} 
+      register: check_go
+    - name: install go
+      unarchive: src=./files/go133.tar.gz dest=/opt
+      when: not check_go.stat.exists
+    - name: checkout
+      environment: env
+      command: "{{ go }} get -d github.com/docker/swarm"
+    - name: check godep
+      stat: path={{ env['GOBIN'] }}/godep
+      register: godep
+    - name: install godep
+      environment: env
+      command: "{{ go }} get github.com/tools/godep"
+      when: not godep.stat.exists
+    - file: path={{ env['GOBIN'] }}/swarm state=absent
+    - name: build swarm
+      environment: env
+      command: chdir={{ env['GOPATH'] }}/src/github.com/docker/swarm 
+               {{ env['GOBIN'] }}/godep go install
+    - name: "check if swarm build success"
+      stat: path={{ env['GOBIN'] }}/swarm
+
