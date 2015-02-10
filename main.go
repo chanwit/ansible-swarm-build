@@ -11,7 +11,7 @@ import (
 
 var VBOX_MANAGE = "VBoxManage"
 
-func Import(file string, memory int, adapter string) error {
+func Import(file string, memory int) error {
 	name := "base"
 	cmd := exec.Command(VBOX_MANAGE, "import", os.Getenv("PWD")+"/"+file,
 		"--vsys", "0", "--vmname", name,
@@ -25,17 +25,18 @@ func Import(file string, memory int, adapter string) error {
 		return err
 	}
 
-	err = Modify(name, adapter)
-
 	_, err = exec.Command(VBOX_MANAGE, "snapshot", "base", "take", "origin").Output()
 	log.Info("Snapshot \"origin\" taken")
 	return err
 }
 
-func Modify(name string, adapter string) error {
+func Modify(name string, adapter string, i int) error {
 	err := exec.Command(VBOX_MANAGE, "modifyvm", name,
+		"--natpf1", fmt.Sprintf("ssh,tcp,127.0.0.1,%d,,22", 2200 + i),
 		"--nic2", "hostonly",
 		"--hostonlyadapter2", adapter,
+		"--cableconnected2", "on",
+	    "--nicpromisc2", "allow-vms",
 		).Run()
 	if err == nil {
 		log.Infof("Modified nic2 for \"%s\"", name)
@@ -43,7 +44,7 @@ func Modify(name string, adapter string) error {
 	return err
 }
 
-func Clone(baseName string, prefix string, num int) error {
+func Clone(baseName string, prefix string, num int, adapter string) error {
 	for i := 1; i <= num; i++ {
 		name := fmt.Sprintf("%s%03d", prefix, i)
 		cmd := exec.Command(VBOX_MANAGE, "clonevm",
@@ -56,6 +57,7 @@ func Clone(baseName string, prefix string, num int) error {
 		if err != nil {
 			return err
 		} else {
+			err = Modify(name, adapter, i)
 			log.Infof("Clone: %s", strings.TrimSpace(string(out)))
 		}
 	}
