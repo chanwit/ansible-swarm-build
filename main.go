@@ -1,88 +1,81 @@
 package main
 
-import "fmt"
-import "os/exec"
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"strings"
 
-type instance int
-type mb int
+	log "github.com/Sirupsen/logrus"
+)
 
-var Instances = instance(1)
-var MB = mb(1)
+var VBOX_MANAGE = "VBoxManage"
 
-type machine struct {
-	name string
-	uid  string
-}
-
-type machines []machine
-
-func (m machines) Install(what string, commit string) {
-	fmt.Printf("len(m): %d\n", len(m))
-	for _, mm := range m {
-		mm.Install(what, commit)
-	}
-}
-
-func (m machine) Install(what string, commit string) {
-	fmt.Printf("%s %s\n", what, commit)
-}
-
-func (m machines) Run(cmd string, args ...string) {
-	fmt.Printf("len(m): %d\n", len(m))
-	for _, mm := range m {
-		mm.Run(cmd, args...)
-	}
-}
-
-func (m machine) Run(cmd string, args ...string) {
-	fmt.Printf("%s %s\n", cmd, args)
-}
-
-func Import() {
-	name := fmt.Sprintf("%s%00d", prefix, i)
-	cmd := exec.Command("vboxmanage", "import", file,
+func Import(file string, memory int, adapter string) error {
+	name := "base"
+	cmd := exec.Command(VBOX_MANAGE, "import", os.Getenv("PWD")+"/"+file,
 		"--vsys", "0", "--vmname", name,
 		"--memory", fmt.Sprintf("%d", memory),
-		"--unit", "10", "--disk", fmt.Sprintf("%s/%s.vmdk", pwd, name))
-	if err := cmd.Run(); err != nil {
+	)
+	_, err := cmd.Output()
+	if err == nil {
+		log.Infof("Imported \"%s\"", name)
+	}
+	if err != nil {
 		return err
 	}
-	out, err := cmd.Output()
-	// parse
+
+	err = Modify(name, adapter)
+
+	_, err = exec.Command(VBOX_MANAGE, "snapshot", "base", "take", "origin").Output()
+	log.Info("Snapshot \"origin\" taken")
+	return err
 }
 
-func NewCluster(num instance, image string, mem mb) machines {
-	// import 1
-	// set 2 interface
-	// 1. host-only (for talking to master)
-	// 2. nat (for internet connection)
-	// clone n-1
-	fmt.Printf("%d %s %d\n", num, image, mem)
-	m := make([]machine, int(num))
-	for i := 1; i <= int(num); i++ {
-		m[i-1] = machine{}
+func Modify(name string, adapter string) error {
+	err := exec.Command(VBOX_MANAGE, "modifyvm", name,
+		"--nic2", "hostonly",
+		"--hostonlyadapter2", adapter,
+		).Run()
+	if err == nil {
+		log.Infof("Modified nic2 for \"%s\"", name)
 	}
-	return machines(m)
+	return err
 }
 
-func main() {
-	m := NewCluster(4*Instances,
-		"ubuntu",
-		512*MB,
-		map[string]string{
-			"SWARM_DISCOVERY": "etcd://master",
-			"SWARM_HOST": "0.0.0.0:2375",
-		})
-	m.Install("docker", "1.4.1")
-	m.Install("github.com/docker/swarm", "0a0b0d0e")
+func Clone(baseName string, prefix string, num int) error {
+	for i := 1; i <= num; i++ {
+		name := fmt.Sprintf("%s%03d", prefix, i)
+		cmd := exec.Command(VBOX_MANAGE, "clonevm",
+			baseName,
+			"--snapshot", "origin",
+			"--options", "link",
+			"--name", name,
+			"--register")
+		out, err := cmd.Output()
+		if err != nil {
+			return err
+		} else {
+			log.Infof("Clone: %s", strings.TrimSpace(string(out)))
+		}
+	}
+	return nil
+}
 
-	master, slaves := m[0], machines(m[1:])
-
-	master.Install("etcd", "1.0")
-	master.Install("zookeeper", "3.4.3")
-
-	slaves.Run("swarm", "join", "--addr", "{{eth0.ipv4.address}}:2375", discovery)
-	master.Run("swarm", "manage", discovery)
-
-	master.Run("docker", "run", "nginx")
+func Remove(args ...string) error {
+	for _, name := range args {
+		if name == "base" {
+			err := exec.Command(VBOX_MANAGE, "snapshot", "base", "delete", "origin").Run()
+			if err != nil {
+				log.Info("Removed snapshot \"base/origin\"")
+			}
+		}
+		cmd := exec.Command(VBOX_MANAGE, "unregistervm", name, "--delete")
+		_, err := cmd.Output()
+		log.Infof("Removed \"%s\"", name)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
