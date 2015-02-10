@@ -1,2 +1,4 @@
 hosts
-
+main._go
+pkg/
+src/
