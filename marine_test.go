@@ -1,4 +1,4 @@
-package main
+package marine
 
 import "testing"
 import "github.com/stretchr/testify/assert"
